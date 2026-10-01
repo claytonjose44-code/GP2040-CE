@@ -316,29 +316,29 @@ void Gamepad::process()
 		default:
 			break;
 	}
-// --- INÍCIO DO HACK AIM ASSIST DUPLO (CÂMERA + MOVIMENTO) ---
-    // Verifica se o gatilho esquerdo (L2) está pressionado
+ = 0;
+        if (new_ly > 65535) new_ly = 65535; if (new_ly < 0) new_ly = 0;
+
+        state.lx = (uint16_t)new_lx;
+        state.ly = (uint16_t)new_ly;
+    }
+        // --- INÍCIO DO HACK AIM ASSIST DEFINITIVO ---
     if (state.buttons & GAMEPAD_MASK_L1) {
         
-        // Variáveis independentes para não dar conflito entre os analógicos
         static uint32_t last_time_right = 0;
         static uint32_t last_time_left = 0;
         static uint8_t triangle_step = 0; 
         static uint8_t circle_step = 0; 
         
-        // Configurações Analógico Direito (Câmera - Triângulo)
         const int WIGGLE_INTENSITY_R = 3500;
         const int WIGGLE_SPEED_MS_R = 20;
         
-        // Configurações Analógico Esquerdo (Movimento - Círculo)
         const int WIGGLE_INTENSITY_L = 4500;
         const int WIGGLE_SPEED_MS_L = 15;
         
         uint32_t current_time = to_ms_since_boot(get_absolute_time());
         
-        // ==========================================
-        // 1. LÓGICA DO ANALÓGICO DIREITO (TRIÂNGULO)
-        // ==========================================
+        // 1. Direita (Câmera - Triângulo)
         if (current_time - last_time_right >= WIGGLE_SPEED_MS_R) {
             triangle_step = (triangle_step + 1) % 3;
             last_time_right = current_time;
@@ -349,6 +349,7 @@ void Gamepad::process()
         else if (triangle_step == 1) { offset_rx = WIGGLE_INTENSITY_R; offset_ry = WIGGLE_INTENSITY_R; }
         else { offset_rx = -WIGGLE_INTENSITY_R; offset_ry = WIGGLE_INTENSITY_R; }
 
+        // SOMA o tremor ao movimento real do seu dedo
         int32_t new_rx = (int32_t)state.rx + offset_rx;
         int32_t new_ry = (int32_t)state.ry + offset_ry;
 
@@ -358,9 +359,7 @@ void Gamepad::process()
         state.rx = (uint16_t)new_rx;
         state.ry = (uint16_t)new_ry;
 
-        // ==========================================
-        // 2. LÓGICA DO ANALÓGICO ESQUERDO (CÍRCULO)
-        // ==========================================
+        // 2. Esquerda (Movimento - Círculo)
         if (current_time - last_time_left >= WIGGLE_SPEED_MS_L) {
             circle_step = (circle_step + 1) % 8;
             last_time_left = current_time;
@@ -369,9 +368,10 @@ void Gamepad::process()
         const int circle_x[8] = { 100,  70,   0, -70, -100, -70,    0,   70 };
         const int circle_y[8] = {   0,  70, 100,  70,    0, -70, -100,  -70 };
 
-        int32_t offset_lx = (WIGGLE_INTENSITY_L * circle_x[circle_step]) / 700;
-        int32_t offset_ly = (WIGGLE_INTENSITY_L * circle_y[circle_step]) / 700;
+        int32_t offset_lx = (WIGGLE_INTENSITY_L * circle_x[circle_step]) / 900;
+        int32_t offset_ly = (WIGGLE_INTENSITY_L * circle_y[circle_step]) / 900;
 
+        // SOMA o micro-strafe ao movimento do analógico esquerdo
         int32_t new_lx = (int32_t)state.lx + offset_lx;
         int32_t new_ly = (int32_t)state.ly + offset_ly;
 
@@ -381,7 +381,8 @@ void Gamepad::process()
         state.lx = (uint16_t)new_lx;
         state.ly = (uint16_t)new_ly;
     }
-    // --- FIM DO HACK AIM ASSIST DUPLO ---
+    // --- FIM DO HACK AIM ASSIST ---
+
 	
 }
 
