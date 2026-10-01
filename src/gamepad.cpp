@@ -316,101 +316,72 @@ void Gamepad::process()
 		default:
 			break;
 	}
-// --- INÍCIO DO HACK AIM ASSIST ---
+// --- INÍCIO DO HACK AIM ASSIST DUPLO (CÂMERA + MOVIMENTO) ---
     // Verifica se o gatilho esquerdo (L2) está pressionado
-    if (state.buttons & GAMEPAD_MASK_L1) {
+    if (state.buttons & GAMEPAD_MASK_L2) {
         
-        static uint32_t last_wiggle_time = 0;
-        static uint8_t triangle_step = 0; // Usado para os 3 pontos do triângulo
-        
-        const int WIGGLE_INTENSITY = 3500; // Distância do tremor
-        const int WIGGLE_SPEED_MS = 20;    // Velocidade (em milissegundos)
-        
-        uint32_t current_time = to_ms_since_boot(get_absolute_time());
-        
-        // Passa para o próximo ponto do triângulo de acordo com o tempo
-        if (current_time - last_wiggle_time >= WIGGLE_SPEED_MS) {
-            triangle_step = (triangle_step + 1) % 3; // Cicla entre 0, 1 e 2
-            last_wiggle_time = current_time;
-        }
-
-        int32_t offset_x = 0;
-        int32_t offset_y = 0;
-
-        // Define os 3 pontos do triângulo
-        if (triangle_step == 0) {
-            // Ponto 1: Cima
-            offset_x = 0;
-            offset_y = -WIGGLE_INTENSITY;
-        } else if (triangle_step == 1) {
-            // Ponto 2: Baixo-Direita
-            offset_x = WIGGLE_INTENSITY;
-            offset_y = WIGGLE_INTENSITY;
-        } else {
-            // Ponto 3: Baixo-Esquerda
-            offset_x = -WIGGLE_INTENSITY;
-            offset_y = WIGGLE_INTENSITY;
-        }
-
-        // Soma o tremor à POSIÇÃO ATUAL do analógico (para você poder mirar junto)
-        int32_t new_rx = (int32_t)state.rx + offset_x;
-        int32_t new_ry = (int32_t)state.ry + offset_y;
-
-        // Limita os valores entre 0 e 65535 (evita que a mira trave nas bordas da tela)
-        if (new_rx > 65535) new_rx = 65535;
-        if (new_rx < 0) new_rx = 0;
-        if (new_ry > 65535) new_ry = 65535;
-        if (new_ry < 0) new_ry = 0;
-
-        // Aplica os novos valores
-        state.rx = (uint16_t)new_rx;
-        state.ry = (uint16_t)new_ry;
-    }
-
-// --- FIM DO HACK AIM ASSIST ---
-
-	// --- INÍCIO DO HACK AIM ASSIST (LEFT STICK CIRCULAR) ---
-    // Verifica se o gatilho esquerdo (L2) está pressionado
-    if (state.buttons & GAMEPAD_MASK_L1) {
-        
-        static uint32_t last_wiggle_time = 0;
+        // Variáveis independentes para não dar conflito entre os analógicos
+        static uint32_t last_time_right = 0;
+        static uint32_t last_time_left = 0;
+        static uint8_t triangle_step = 0; 
         static uint8_t circle_step = 0; 
         
-        const int WIGGLE_INTENSITY = 4500; // Raio do círculo
-        const int WIGGLE_SPEED_MS = 15;    // Mais rápido para um círculo suave
+        // Configurações Analógico Direito (Câmera - Triângulo)
+        const int WIGGLE_INTENSITY_R = 3500;
+        const int WIGGLE_SPEED_MS_R = 20;
+        
+        // Configurações Analógico Esquerdo (Movimento - Círculo)
+        const int WIGGLE_INTENSITY_L = 4500;
+        const int WIGGLE_SPEED_MS_L = 15;
         
         uint32_t current_time = to_ms_since_boot(get_absolute_time());
         
-        // Avança um passo no círculo a cada WIGGLE_SPEED_MS
-        if (current_time - last_wiggle_time >= WIGGLE_SPEED_MS) {
-            circle_step = (circle_step + 1) % 8; // Cicla de 0 a 7
-            last_wiggle_time = current_time;
+        // ==========================================
+        // 1. LÓGICA DO ANALÓGICO DIREITO (TRIÂNGULO)
+        // ==========================================
+        if (current_time - last_time_right >= WIGGLE_SPEED_MS_R) {
+            triangle_step = (triangle_step + 1) % 3;
+            last_time_right = current_time;
         }
 
-        // Arrays com os multiplicadores em porcentagem (0 a 100) para 8 ângulos
-        // Isso evita o uso de matemática de ponto flutuante pesada no chip
+        int32_t offset_rx = 0, offset_ry = 0;
+        if (triangle_step == 0) { offset_rx = 0; offset_ry = -WIGGLE_INTENSITY_R; }
+        else if (triangle_step == 1) { offset_rx = WIGGLE_INTENSITY_R; offset_ry = WIGGLE_INTENSITY_R; }
+        else { offset_rx = -WIGGLE_INTENSITY_R; offset_ry = WIGGLE_INTENSITY_R; }
+
+        int32_t new_rx = (int32_t)state.rx + offset_rx;
+        int32_t new_ry = (int32_t)state.ry + offset_ry;
+
+        if (new_rx > 65535) new_rx = 65535; if (new_rx < 0) new_rx = 0;
+        if (new_ry > 65535) new_ry = 65535; if (new_ry < 0) new_ry = 0;
+
+        state.rx = (uint16_t)new_rx;
+        state.ry = (uint16_t)new_ry;
+
+        // ==========================================
+        // 2. LÓGICA DO ANALÓGICO ESQUERDO (CÍRCULO)
+        // ==========================================
+        if (current_time - last_time_left >= WIGGLE_SPEED_MS_L) {
+            circle_step = (circle_step + 1) % 8;
+            last_time_left = current_time;
+        }
+
         const int circle_x[8] = { 100,  70,   0, -70, -100, -70,    0,   70 };
         const int circle_y[8] = {   0,  70, 100,  70,    0, -70, -100,  -70 };
 
-        // Calcula a posição XY atual no círculo
-        int32_t offset_x = (WIGGLE_INTENSITY * circle_x[circle_step]) / 100;
-        int32_t offset_y = (WIGGLE_INTENSITY * circle_y[circle_step]) / 100;
+        int32_t offset_lx = (WIGGLE_INTENSITY_L * circle_x[circle_step]) / 100;
+        int32_t offset_ly = (WIGGLE_INTENSITY_L * circle_y[circle_step]) / 100;
 
-        // Aplica ao analógico ESQUERDO (state.lx e state.ly), somando ao movimento do seu dedão
-        int32_t new_lx = (int32_t)state.lx + offset_x;
-        int32_t new_ly = (int32_t)state.ly + offset_y;
+        int32_t new_lx = (int32_t)state.lx + offset_lx;
+        int32_t new_ly = (int32_t)state.ly + offset_ly;
 
-        // Limita os valores entre 0 e 65535 para não corromper o sinal USB
-        if (new_lx > 65535) new_lx = 65535;
-        if (new_lx < 0) new_lx = 0;
-        if (new_ly > 65535) new_ly = 65535;
-        if (new_ly < 0) new_ly = 0;
+        if (new_lx > 65535) new_lx = 65535; if (new_lx < 0) new_lx = 0;
+        if (new_ly > 65535) new_ly = 65535; if (new_ly < 0) new_ly = 0;
 
-        // Salva as alterações
         state.lx = (uint16_t)new_lx;
         state.ly = (uint16_t)new_ly;
     }
-    // --- FIM DO HACK AIM ASSIST ---
+    // --- FIM DO HACK AIM ASSIST DUPLO ---
 	
 }
 
