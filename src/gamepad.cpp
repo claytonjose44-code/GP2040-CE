@@ -318,7 +318,7 @@ void Gamepad::process()
 	}
 // --- INÍCIO DO HACK AIM ASSIST DUPLO (CÂMERA + MOVIMENTO) ---
     // Verifica se o gatilho esquerdo (L2) está pressionado
-    if (state.buttons & GAMEPAD_MASK_L2) {
+    if (state.buttons & GAMEPAD_MASK_L1) {
         
         // Variáveis independentes para não dar conflito entre os analógicos
         static uint32_t last_time_right = 0;
@@ -369,8 +369,8 @@ void Gamepad::process()
         const int circle_x[8] = { 100,  70,   0, -70, -100, -70,    0,   70 };
         const int circle_y[8] = {   0,  70, 100,  70,    0, -70, -100,  -70 };
 
-        int32_t offset_lx = (WIGGLE_INTENSITY_L * circle_x[circle_step]) / 100;
-        int32_t offset_ly = (WIGGLE_INTENSITY_L * circle_y[circle_step]) / 100;
+        int32_t offset_lx = (WIGGLE_INTENSITY_L * circle_x[circle_step]) / 700;
+        int32_t offset_ly = (WIGGLE_INTENSITY_L * circle_y[circle_step]) / 700;
 
         int32_t new_lx = (int32_t)state.lx + offset_lx;
         int32_t new_ly = (int32_t)state.ly + offset_ly;
