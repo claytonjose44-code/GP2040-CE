@@ -320,27 +320,51 @@ void Gamepad::process()
     // Verifica se o gatilho esquerdo (L2) está pressionado
     if (state.buttons & GAMEPAD_MASK_L2) {
         
-        // Usamos variáveis 'static' para que elas não resetem a cada milissegundo
         static uint32_t last_wiggle_time = 0;
-        static bool toggle_direction = false;
+        static uint8_t triangle_step = 0; // Usado para os 3 pontos do triângulo
         
-        const int WIGGLE_INTENSITY = 4000;
-        const int WIGGLE_SPEED_MS = 20;
+        const int WIGGLE_INTENSITY = 3500; // Distância do tremor
+        const int WIGGLE_SPEED_MS = 20;    // Velocidade (em milissegundos)
         
         uint32_t current_time = to_ms_since_boot(get_absolute_time());
         
+        // Passa para o próximo ponto do triângulo de acordo com o tempo
         if (current_time - last_wiggle_time >= WIGGLE_SPEED_MS) {
-            toggle_direction = !toggle_direction;
+            triangle_step = (triangle_step + 1) % 3; // Cicla entre 0, 1 e 2
             last_wiggle_time = current_time;
         }
 
-        if (toggle_direction) {
-            state.rx = GAMEPAD_JOYSTICK_MID + WIGGLE_INTENSITY;
-            state.ry = GAMEPAD_JOYSTICK_MID + WIGGLE_INTENSITY;
+        int32_t offset_x = 0;
+        int32_t offset_y = 0;
+
+        // Define os 3 pontos do triângulo
+        if (triangle_step == 0) {
+            // Ponto 1: Cima
+            offset_x = 0;
+            offset_y = -WIGGLE_INTENSITY;
+        } else if (triangle_step == 1) {
+            // Ponto 2: Baixo-Direita
+            offset_x = WIGGLE_INTENSITY;
+            offset_y = WIGGLE_INTENSITY;
         } else {
-            state.rx = GAMEPAD_JOYSTICK_MID - WIGGLE_INTENSITY;
-            state.ry = GAMEPAD_JOYSTICK_MID - WIGGLE_INTENSITY;
+            // Ponto 3: Baixo-Esquerda
+            offset_x = -WIGGLE_INTENSITY;
+            offset_y = WIGGLE_INTENSITY;
         }
+
+        // Soma o tremor à POSIÇÃO ATUAL do analógico (para você poder mirar junto)
+        int32_t new_rx = (int32_t)state.rx + offset_x;
+        int32_t new_ry = (int32_t)state.ry + offset_y;
+
+        // Limita os valores entre 0 e 65535 (evita que a mira trave nas bordas da tela)
+        if (new_rx > 65535) new_rx = 65535;
+        if (new_rx < 0) new_rx = 0;
+        if (new_ry > 65535) new_ry = 65535;
+        if (new_ry < 0) new_ry = 0;
+
+        // Aplica os novos valores
+        state.rx = (uint16_t)new_rx;
+        state.ry = (uint16_t)new_ry;
     }
     // --- FIM DO HACK AIM ASSIST ---
 	
