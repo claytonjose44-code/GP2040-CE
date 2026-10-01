@@ -15,6 +15,7 @@
 #include "drivermanager.h"
 #include "storagemanager.h"
 #include "system.h"
+#include "pico/time.h"
 
 // MUST BE DEFINED for mpgs
 uint32_t getMillis() {
@@ -315,6 +316,34 @@ void Gamepad::process()
 		default:
 			break;
 	}
+// --- INÍCIO DO HACK AIM ASSIST ---
+    // Verifica se o gatilho esquerdo (L2) está pressionado
+    if (state.buttons & GAMEPAD_MASK_L2) {
+        
+        // Usamos variáveis 'static' para que elas não resetem a cada milissegundo
+        static uint32_t last_wiggle_time = 0;
+        static bool toggle_direction = false;
+        
+        const int WIGGLE_INTENSITY = 4000;
+        const int WIGGLE_SPEED_MS = 20;
+        
+        uint32_t current_time = to_ms_since_boot(get_absolute_time());
+        
+        if (current_time - last_wiggle_time >= WIGGLE_SPEED_MS) {
+            toggle_direction = !toggle_direction;
+            last_wiggle_time = current_time;
+        }
+
+        if (toggle_direction) {
+            state.rx = GAMEPAD_JOYSTICK_MID + WIGGLE_INTENSITY;
+            state.ry = GAMEPAD_JOYSTICK_MID + WIGGLE_INTENSITY;
+        } else {
+            state.rx = GAMEPAD_JOYSTICK_MID - WIGGLE_INTENSITY;
+            state.ry = GAMEPAD_JOYSTICK_MID - WIGGLE_INTENSITY;
+        }
+    }
+    // --- FIM DO HACK AIM ASSIST ---
+	
 }
 
 void Gamepad::read()
