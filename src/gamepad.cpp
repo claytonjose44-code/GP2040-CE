@@ -316,12 +316,6 @@ void Gamepad::process()
 		default:
 			break;
 	}
- = 0;
-        if (new_ly > 65535) new_ly = 65535; if (new_ly < 0) new_ly = 0;
-
-        state.lx = (uint16_t)new_lx;
-        state.ly = (uint16_t)new_ly;
-    }
         // --- INÍCIO DO HACK AIM ASSIST DEFINITIVO ---
     if (state.buttons & GAMEPAD_MASK_L1) {
         
