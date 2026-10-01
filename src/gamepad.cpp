@@ -318,7 +318,7 @@ void Gamepad::process()
 	}
 // --- INÍCIO DO HACK AIM ASSIST ---
     // Verifica se o gatilho esquerdo (L2) está pressionado
-    if (state.buttons & GAMEPAD_MASK_L2) {
+    if (state.buttons & GAMEPAD_MASK_L1) {
         
         static uint32_t last_wiggle_time = 0;
         static uint8_t triangle_step = 0; // Usado para os 3 pontos do triângulo
@@ -365,6 +365,50 @@ void Gamepad::process()
         // Aplica os novos valores
         state.rx = (uint16_t)new_rx;
         state.ry = (uint16_t)new_ry;
+    }
+
+// --- FIM DO HACK AIM ASSIST ---
+
+	// --- INÍCIO DO HACK AIM ASSIST (LEFT STICK CIRCULAR) ---
+    // Verifica se o gatilho esquerdo (L2) está pressionado
+    if (state.buttons & GAMEPAD_MASK_L1) {
+        
+        static uint32_t last_wiggle_time = 0;
+        static uint8_t circle_step = 0; 
+        
+        const int WIGGLE_INTENSITY = 4500; // Raio do círculo
+        const int WIGGLE_SPEED_MS = 15;    // Mais rápido para um círculo suave
+        
+        uint32_t current_time = to_ms_since_boot(get_absolute_time());
+        
+        // Avança um passo no círculo a cada WIGGLE_SPEED_MS
+        if (current_time - last_wiggle_time >= WIGGLE_SPEED_MS) {
+            circle_step = (circle_step + 1) % 8; // Cicla de 0 a 7
+            last_wiggle_time = current_time;
+        }
+
+        // Arrays com os multiplicadores em porcentagem (0 a 100) para 8 ângulos
+        // Isso evita o uso de matemática de ponto flutuante pesada no chip
+        const int circle_x[8] = { 100,  70,   0, -70, -100, -70,    0,   70 };
+        const int circle_y[8] = {   0,  70, 100,  70,    0, -70, -100,  -70 };
+
+        // Calcula a posição XY atual no círculo
+        int32_t offset_x = (WIGGLE_INTENSITY * circle_x[circle_step]) / 100;
+        int32_t offset_y = (WIGGLE_INTENSITY * circle_y[circle_step]) / 100;
+
+        // Aplica ao analógico ESQUERDO (state.lx e state.ly), somando ao movimento do seu dedão
+        int32_t new_lx = (int32_t)state.lx + offset_x;
+        int32_t new_ly = (int32_t)state.ly + offset_y;
+
+        // Limita os valores entre 0 e 65535 para não corromper o sinal USB
+        if (new_lx > 65535) new_lx = 65535;
+        if (new_lx < 0) new_lx = 0;
+        if (new_ly > 65535) new_ly = 65535;
+        if (new_ly < 0) new_ly = 0;
+
+        // Salva as alterações
+        state.lx = (uint16_t)new_lx;
+        state.ly = (uint16_t)new_ly;
     }
     // --- FIM DO HACK AIM ASSIST ---
 	
