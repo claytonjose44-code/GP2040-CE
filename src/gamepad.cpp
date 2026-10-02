@@ -16,6 +16,8 @@
 #include "storagemanager.h"
 #include "system.h"
 #include "pico/time.h"
+#include <cstdlib> // Necessário para a função rand()
+
 
 // MUST BE DEFINED for mpgs
 uint32_t getMillis() {
@@ -316,7 +318,7 @@ void Gamepad::process()
 		default:
 			break;
 	}
-        // --- INÍCIO DO HACK AIM ASSIST DEFINITIVO ---
+     // --- INÍCIO DO HACK AIM ASSIST HUMANIZADO ---
     if (state.buttons & GAMEPAD_MASK_L1) {
         
         static uint32_t last_time_right = 0;
@@ -324,26 +326,31 @@ void Gamepad::process()
         static uint8_t triangle_step = 0; 
         static uint8_t circle_step = 0; 
         
-        const int WIGGLE_INTENSITY_R = 3500;
-        const int WIGGLE_SPEED_MS_R = 20;
-        
-        const int WIGGLE_INTENSITY_L = 4500;
-        const int WIGGLE_SPEED_MS_L = 15;
+        // As constantes agora são valores "Base"
+        const int BASE_INTENSITY_R = 3000;
+        const int BASE_INTENSITY_L = 4000;
         
         uint32_t current_time = to_ms_since_boot(get_absolute_time());
         
-        // 1. Direita (Câmera - Triângulo)
-        if (current_time - last_time_right >= WIGGLE_SPEED_MS_R) {
+        // ==========================================
+        // 1. DIREITA (Triângulo com Tempo Aleatório)
+        // ==========================================
+        // Gera um tempo aleatório entre 15ms e 30ms para o próximo movimento
+        uint32_t random_delay_r = 15 + (rand() % 16); 
+        
+        if (current_time - last_time_right >= random_delay_r) {
             triangle_step = (triangle_step + 1) % 3;
             last_time_right = current_time;
         }
 
-        int32_t offset_rx = 0, offset_ry = 0;
-        if (triangle_step == 0) { offset_rx = 0; offset_ry = -WIGGLE_INTENSITY_R; }
-        else if (triangle_step == 1) { offset_rx = WIGGLE_INTENSITY_R; offset_ry = WIGGLE_INTENSITY_R; }
-        else { offset_rx = -WIGGLE_INTENSITY_R; offset_ry = WIGGLE_INTENSITY_R; }
+        // Adiciona uma variação aleatória de até +-500 na força do tremor
+        int current_intensity_r = BASE_INTENSITY_R + ((rand() % 1000) - 500);
 
-        // SOMA o tremor ao movimento real do seu dedo
+        int32_t offset_rx = 0, offset_ry = 0;
+        if (triangle_step == 0) { offset_rx = 0; offset_ry = -current_intensity_r; }
+        else if (triangle_step == 1) { offset_rx = current_intensity_r; offset_ry = current_intensity_r; }
+        else { offset_rx = -current_intensity_r; offset_ry = current_intensity_r; }
+
         int32_t new_rx = (int32_t)state.rx + offset_rx;
         int32_t new_ry = (int32_t)state.ry + offset_ry;
 
@@ -353,8 +360,13 @@ void Gamepad::process()
         state.rx = (uint16_t)new_rx;
         state.ry = (uint16_t)new_ry;
 
-        // 2. Esquerda (Movimento - Círculo)
-        if (current_time - last_time_left >= WIGGLE_SPEED_MS_L) {
+        // ==========================================
+        // 2. ESQUERDA (Círculo Imperfeito)
+        // ==========================================
+        // Gera um tempo aleatório entre 10ms e 25ms para o strafe
+        uint32_t random_delay_l = 10 + (rand() % 16);
+        
+        if (current_time - last_time_left >= random_delay_l) {
             circle_step = (circle_step + 1) % 8;
             last_time_left = current_time;
         }
@@ -362,10 +374,17 @@ void Gamepad::process()
         const int circle_x[8] = { 100,  70,   0, -70, -100, -70,    0,   70 };
         const int circle_y[8] = {   0,  70, 100,  70,    0, -70, -100,  -70 };
 
-        int32_t offset_lx = (WIGGLE_INTENSITY_L * circle_x[circle_step]) / 900;
-        int32_t offset_ly = (WIGGLE_INTENSITY_L * circle_y[circle_step]) / 900;
+        // Adiciona uma variação aleatória na força do movimento esquerdo
+        int current_intensity_l = BASE_INTENSITY_L + ((rand() % 1200) - 600);
 
-        // SOMA o micro-strafe ao movimento do analógico esquerdo
+        // Aplica a intensidade imperfeita ao formato circular
+        int32_t offset_lx = (current_intensity_l * circle_x[circle_step]) / 100;
+        int32_t offset_ly = (current_intensity_l * circle_y[circle_step]) / 100;
+
+        // Adiciona um leve "ruído" (jitter) extra de até +-150 para quebrar o padrão geométrico
+        offset_lx += ((rand() % 300) - 150);
+        offset_ly += ((rand() % 300) - 150);
+
         int32_t new_lx = (int32_t)state.lx + offset_lx;
         int32_t new_ly = (int32_t)state.ly + offset_ly;
 
@@ -375,7 +394,8 @@ void Gamepad::process()
         state.lx = (uint16_t)new_lx;
         state.ly = (uint16_t)new_ly;
     }
-    // --- FIM DO HACK AIM ASSIST ---
+    // --- FIM DO HACK AIM ASSIST HUMANIZADO ---
+
 
 	
 }
