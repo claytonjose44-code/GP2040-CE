@@ -318,84 +318,132 @@ void Gamepad::process()
 		default:
 			break;
 	}
-     // --- INÍCIO DO HACK AIM ASSIST HUMANIZADO ---
-    if (state.buttons & GAMEPAD_MASK_L1) {
-        
-        static uint32_t last_time_right = 0;
-        static uint32_t last_time_left = 0;
-        static uint8_t triangle_step = 0; 
-        static uint8_t circle_step = 0; 
-        
-        // As constantes agora são valores "Base"
-        const int BASE_INTENSITY_R = 3000;
-        const int BASE_INTENSITY_L = 4000;
-        
-        uint32_t current_time = to_ms_since_boot(get_absolute_time());
-        
-        // ==========================================
-        // 1. DIREITA (Triângulo com Tempo Aleatório)
-        // ==========================================
-        // Gera um tempo aleatório entre 15ms e 30ms para o próximo movimento
-        uint32_t random_delay_r = 15 + (rand() % 16); 
-        
-        if (current_time - last_time_right >= random_delay_r) {
-            triangle_step = (triangle_step + 1) % 3;
-            last_time_right = current_time;
-        }
+    // ============================================================
+// Movimento dos analógicos durante L2
+// Otimizado para RP2040 / GP2040-CE
+// ============================================================
 
-        // Adiciona uma variação aleatória de até +-500 na força do tremor
-        int current_intensity_r = BASE_INTENSITY_R + ((rand() % 1000) - 500);
+if (state.buttons & GAMEPAD_MASK_L1) {
 
-        int32_t offset_rx = 0, offset_ry = 0;
-        if (triangle_step == 0) { offset_rx = 0; offset_ry = -current_intensity_r; }
-        else if (triangle_step == 1) { offset_rx = current_intensity_r; offset_ry = current_intensity_r; }
-        else { offset_rx = -current_intensity_r; offset_ry = current_intensity_r; }
+    static uint32_t last_right_ms = 0;
+    static uint32_t last_left_ms  = 0;
 
-        int32_t new_rx = (int32_t)state.rx + offset_rx;
-        int32_t new_ry = (int32_t)state.ry + offset_ry;
+    static uint8_t right_step = 0;
+    static uint8_t left_step  = 0;
 
-        if (new_rx > 65535) new_rx = 65535; if (new_rx < 0) new_rx = 0;
-        if (new_ry > 65535) new_ry = 65535; if (new_ry < 0) new_ry = 0;
+    static uint32_t right_delay = 20;
+    static uint32_t left_delay  = 15;
 
-        state.rx = (uint16_t)new_rx;
-        state.ry = (uint16_t)new_ry;
+    const uint32_t now =
+        to_ms_since_boot(get_absolute_time());
 
-        // ==========================================
-        // 2. ESQUERDA (Círculo Imperfeito)
-        // ==========================================
-        // Gera um tempo aleatório entre 10ms e 25ms para o strafe
-        uint32_t random_delay_l = 10 + (rand() % 16);
-        
-        if (current_time - last_time_left >= random_delay_l) {
-            circle_step = (circle_step + 1) % 8;
-            last_time_left = current_time;
-        }
+    // --------------------------------------------------------
+    // Pequena função para limitar o eixo
+    // --------------------------------------------------------
+    auto clamp_axis = [](int32_t value) -> uint16_t {
+        if (value < 0)
+            return 0;
 
-        const int circle_x[8] = { 100,  70,   0, -70, -100, -70,    0,   70 };
-        const int circle_y[8] = {   0,  70, 100,  70,    0, -70, -100,  -70 };
+        if (value > 65535)
+            return 65535;
 
-        // Adiciona uma variação aleatória na força do movimento esquerdo
-        int current_intensity_l = BASE_INTENSITY_L + ((rand() % 1200) - 600);
+        return static_cast<uint16_t>(value);
+    };
 
-        // Aplica a intensidade imperfeita ao formato circular
-        int32_t offset_lx = (current_intensity_l * circle_x[circle_step]) / 100;
-        int32_t offset_ly = (current_intensity_l * circle_y[circle_step]) / 100;
+    // ========================================================
+    // ANALÓGICO DIREITO
+    // ========================================================
 
-        // Adiciona um leve "ruído" (jitter) extra de até +-150 para quebrar o padrão geométrico
-        offset_lx += ((rand() % 300) - 150);
-        offset_ly += ((rand() % 300) - 150);
+    if ((now - last_right_ms) >= right_delay) {
 
-        int32_t new_lx = (int32_t)state.lx + offset_lx;
-        int32_t new_ly = (int32_t)state.ly + offset_ly;
+        right_step = (right_step + 1) % 3;
 
-        if (new_lx > 65535) new_lx = 65535; if (new_lx < 0) new_lx = 0;
-        if (new_ly > 65535) new_ly = 65535; if (new_ly < 0) new_ly = 0;
+        last_right_ms = now;
 
-        state.lx = (uint16_t)new_lx;
-        state.ly = (uint16_t)new_ly;
+        // Próximo intervalo: 15–30 ms
+        right_delay = 15 + (rand() % 16);
     }
-    // --- FIM DO HACK AIM ASSIST HUMANIZADO ---
 
+    // Intensidade: 2500–3500
+    const int32_t right_intensity =
+        3000 + (rand() % 1001) - 500;
+
+    int32_t rx_offset = 0;
+    int32_t ry_offset = 0;
+
+    switch (right_step) {
+
+        case 0:
+            ry_offset = -right_intensity;
+            break;
+
+        case 1:
+            rx_offset = right_intensity;
+            ry_offset = right_intensity;
+            break;
+
+        case 2:
+            rx_offset = -right_intensity;
+            ry_offset = right_intensity;
+            break;
+    }
+
+    state.rx = clamp_axis(
+        static_cast<int32_t>(state.rx) + rx_offset
+    );
+
+    state.ry = clamp_axis(
+        static_cast<int32_t>(state.ry) + ry_offset
+    );
+
+
+    // ========================================================
+    // ANALÓGICO ESQUERDO
+    // ========================================================
+
+    if ((now - last_left_ms) >= left_delay) {
+
+        left_step = (left_step + 1) & 7;
+
+        last_left_ms = now;
+
+        // Próximo intervalo: 10–25 ms
+        left_delay = 10 + (rand() % 16);
+    }
+
+    // Círculo de 8 posições
+    static const int8_t circle_x[8] = {
+         100,  70,   0, -70,
+        -100, -70,   0,  70
+    };
+
+    static const int8_t circle_y[8] = {
+           0,  70, 100,  70,
+           0, -70,-100, -70
+    };
+
+    // Intensidade: 3400–4600
+    const int32_t left_intensity =
+        4000 + (rand() % 1201) - 600;
+
+    int32_t lx_offset =
+        (left_intensity * circle_x[left_step]) / 100;
+
+    int32_t ly_offset =
+        (left_intensity * circle_y[left_step]) / 100;
+
+    // Jitter pequeno
+    lx_offset += (rand() % 301) - 150;
+    ly_offset += (rand() % 301) - 150;
+
+    state.lx = clamp_axis(
+        static_cast<int32_t>(state.lx) + lx_offset
+    );
+
+    state.ly = clamp_axis(
+        static_cast<int32_t>(state.ly) + ly_offset
+    );
+}
 
 	
 }
