@@ -318,28 +318,20 @@ void Gamepad::process()
 		default:
 			break;
 	}
-    // ============================================================
-// Movimento dos analógicos durante L2
-// Otimizado para RP2040 / GP2040-CE
+// ============================================================
+// Movimento circular somente do analógico esquerdo com R1
 // ============================================================
 
-if (state.buttons & GAMEPAD_MASK_L1) {
+static uint32_t last_left_ms = 0;
+static uint8_t left_step = 0;
+static uint32_t left_delay = 15;
 
-    static uint32_t last_right_ms = 0;
-    static uint32_t last_left_ms  = 0;
-
-    static uint8_t right_step = 0;
-    static uint8_t left_step  = 0;
-
-    static uint32_t right_delay = 20;
-    static uint32_t left_delay  = 15;
+if (state.buttons & GAMEPAD_MASK_R1) {
 
     const uint32_t now =
         to_ms_since_boot(get_absolute_time());
 
-    // --------------------------------------------------------
-    // Pequena função para limitar o eixo
-    // --------------------------------------------------------
+    // Limita os valores do analógico
     auto clamp_axis = [](int32_t value) -> uint16_t {
         if (value < 0)
             return 0;
@@ -350,68 +342,17 @@ if (state.buttons & GAMEPAD_MASK_L1) {
         return static_cast<uint16_t>(value);
     };
 
-    // ========================================================
-    // ANALÓGICO DIREITO
-    // ========================================================
-
-    if ((now - last_right_ms) >= right_delay) {
-
-        right_step = (right_step + 1) % 3;
-
-        last_right_ms = now;
-
-        // Próximo intervalo: 15–30 ms
-        right_delay = 15 + (rand() % 16);
-    }
-
-    // Intensidade: 2500–3500
-    const int32_t right_intensity =
-        3000 + (rand() % 1001) - 500;
-
-    int32_t rx_offset = 0;
-    int32_t ry_offset = 0;
-
-    switch (right_step) {
-
-        case 0:
-            ry_offset = -right_intensity;
-            break;
-
-        case 1:
-            rx_offset = right_intensity;
-            ry_offset = right_intensity;
-            break;
-
-        case 2:
-            rx_offset = -right_intensity;
-            ry_offset = right_intensity;
-            break;
-    }
-
-    state.rx = clamp_axis(
-        static_cast<int32_t>(state.rx) + rx_offset
-    );
-
-    state.ry = clamp_axis(
-        static_cast<int32_t>(state.ry) + ry_offset
-    );
-
-
-    // ========================================================
-    // ANALÓGICO ESQUERDO
-    // ========================================================
-
+    // Atualização do movimento
     if ((now - last_left_ms) >= left_delay) {
 
         left_step = (left_step + 1) & 7;
-
         last_left_ms = now;
 
-        // Próximo intervalo: 10–25 ms
+        // Intervalo variável: 10–25 ms
         left_delay = 10 + (rand() % 16);
     }
 
-    // Círculo de 8 posições
+    // Oito posições circulares
     static const int8_t circle_x[8] = {
          100,  70,   0, -70,
         -100, -70,   0,  70
@@ -422,7 +363,7 @@ if (state.buttons & GAMEPAD_MASK_L1) {
            0, -70,-100, -70
     };
 
-    // Intensidade: 3400–4600
+    // Intensidade variável
     const int32_t left_intensity =
         4000 + (rand() % 1201) - 600;
 
@@ -432,10 +373,11 @@ if (state.buttons & GAMEPAD_MASK_L1) {
     int32_t ly_offset =
         (left_intensity * circle_y[left_step]) / 100;
 
-    // Jitter pequeno
+    // Pequena variação
     lx_offset += (rand() % 301) - 150;
     ly_offset += (rand() % 301) - 150;
 
+    // Aplica somente no analógico esquerdo
     state.lx = clamp_axis(
         static_cast<int32_t>(state.lx) + lx_offset
     );
@@ -443,10 +385,14 @@ if (state.buttons & GAMEPAD_MASK_L1) {
     state.ly = clamp_axis(
         static_cast<int32_t>(state.ly) + ly_offset
     );
-}
 
+} else {
+    left_step = 0;
+    last_left_ms = 0;
+}
 	
 }
+
 
 void Gamepad::read()
 {
