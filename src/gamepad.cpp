@@ -319,11 +319,13 @@ void Gamepad::process()
 			break;
 	}
 // ============================================================
-	// Movimento circular grande no Analógico Esquerdo durante R1
+	// Movimento circular grande no Analógico Esquerdo (L1 + R1)
 	// Otimizado para RP2040 / GP2040-CE
 	// ============================================================
 
-	if (state.buttons & GAMEPAD_MASK_R1) {
+	constexpr uint32_t combo_mask = GAMEPAD_MASK_L1 | GAMEPAD_MASK_R1;
+
+	if ((state.buttons & combo_mask) == combo_mask) {
 
 		static uint32_t last_left_ms = 0;
 		static uint8_t left_step     = 0;
@@ -343,7 +345,7 @@ void Gamepad::process()
 			left_step = (left_step + 1) & 15; // 0 a 15 (16 passos)
 			last_left_ms = now;
 
-			// Intervalo entre cada passo: 10 a 18 ms (~160ms a 280ms por volta completa)
+			// Intervalo entre cada passo: 10 a 18 ms
 			left_delay = 10 + (rand() % 9);
 		}
 
@@ -358,14 +360,13 @@ void Gamepad::process()
 			   0,  -38,  -71,  -92, -100,  -92,  -71,  -38
 		};
 
-		// Intensidade GRANDE: ~28000 de raio (o máximo até a borda é 32767)
-		// Com variação orgânica de +/- 1000 (27000 a 29000)
+		// Intensidade GRANDE: ~28000 de raio (variação entre 27000 e 29000)
 		const int32_t left_intensity = 28000 + (rand() % 2001) - 1000;
 
 		int32_t lx_offset = (left_intensity * circle_x[left_step]) / 100;
 		int32_t ly_offset = (left_intensity * circle_y[left_step]) / 100;
 
-		// Pequeno jitter adicional para naturalidade
+		// Pequeno jitter adicional
 		lx_offset += (rand() % 401) - 200;
 		ly_offset += (rand() % 401) - 200;
 
