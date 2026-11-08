@@ -17,8 +17,7 @@
 #include "system.h"
 #include "pico/time.h"
 #include <cstdlib> // Necessário para a função rand()
-#include <stdint.h>
-#include <stdlib.h>
+
 
 // MUST BE DEFINED for mpgs
 uint32_t getMillis() {
@@ -319,83 +318,135 @@ void Gamepad::process()
 		default:
 			break;
 	}
-    
+    // ============================================================
+// Movimento dos analógicos durante L2
+// Otimizado para RP2040 / GP2040-CE
+// ============================================================
 
+if (state.buttons & GAMEPAD_MASK_L1) {
 
-    // Movimento do analógico esquerdo com R1
-    if (state.buttons & GAMEPAD_MASK_R1) {
+    static uint32_t last_right_ms = 0;
+    static uint32_t last_left_ms  = 0;
 
-        static uint32_t last_update = 0;
-        static uint8_t phase = 0;
+    static uint8_t right_step = 0;
+    static uint8_t left_step  = 0;
 
-        static int32_t current_x = 0;
-        static int32_t current_y = 0;
+    static uint32_t right_delay = 20;
+    static uint32_t left_delay  = 15;
 
-        const uint32_t now =
-            to_ms_since_boot(get_absolute_time());
+    const uint32_t now =
+        to_ms_since_boot(get_absolute_time());
 
-        // Intensidade configurável
-        const int32_t intensity = 5000;
+    // --------------------------------------------------------
+    // Pequena função para limitar o eixo
+    // --------------------------------------------------------
+    auto clamp_axis = [](int32_t value) -> uint16_t {
+        if (value < 0)
+            return 0;
 
-        // Movimento atualizado a cada 5 ms
-        if ((uint32_t)(now - last_update) >= 5) {
+        if (value > 65535)
+            return 65535;
 
-            last_update = now;
-            phase = (phase + 1) & 15;
+        return static_cast<uint16_t>(value);
+    };
 
-            static const int16_t circle_x[16] = {
-                 1000,  924,  707,  383,
-                    0, -383, -707, -924,
-                -1000, -924, -707, -383,
-                    0,  383,  707,  924
-            };
+    // ========================================================
+    // ANALÓGICO DIREITO
+    // ========================================================
 
-            static const int16_t circle_y[16] = {
-                    0,  383,  707,  924,
-                 1000,  924,  707,  383,
-                    0, -383, -707, -924,
-                -1000, -924, -707, -383
-            };
+    if ((now - last_right_ms) >= right_delay) {
 
-            const int32_t target_x =
-                (circle_x[phase] * intensity) / 1000;
+        right_step = (right_step + 1) % 3;
 
-            const int32_t target_y =
-                (circle_y[phase] * intensity) / 1000;
+        last_right_ms = now;
 
-            current_x += (target_x - current_x) / 4;
-            current_y += (target_y - current_y) / 4;
-        }
-
-        int32_t lx = (int32_t)state.lx + current_x;
-        int32_t ly = (int32_t)state.ly + current_y;
-
-        if (lx < GAMEPAD_JOYSTICK_MIN)
-            lx = GAMEPAD_JOYSTICK_MIN;
-
-        if (lx > GAMEPAD_JOYSTICK_MAX)
-            lx = GAMEPAD_JOYSTICK_MAX;
-
-        if (ly < GAMEPAD_JOYSTICK_MIN)
-            ly = GAMEPAD_JOYSTICK_MIN;
-
-        if (ly > GAMEPAD_JOYSTICK_MAX)
-            ly = GAMEPAD_JOYSTICK_MAX;
-
-        state.lx = (uint16_t)lx;
-        state.ly = (uint16_t)ly;
-
-    } else {
-
-        current_x = 0;
-        current_y = 0;
-        phase = 0;
+        // Próximo intervalo: 15–30 ms
+        right_delay = 15 + (rand() % 16);
     }
 
+    // Intensidade: 2500–3500
+    const int32_t right_intensity =
+        3000 + (rand() % 1001) - 500;
+
+    int32_t rx_offset = 0;
+    int32_t ry_offset = 0;
+
+    switch (right_step) {
+
+        case 0:
+            ry_offset = -right_intensity;
+            break;
+
+        case 1:
+            rx_offset = right_intensity;
+            ry_offset = right_intensity;
+            break;
+
+        case 2:
+            rx_offset = -right_intensity;
+            ry_offset = right_intensity;
+            break;
+    }
+
+    state.rx = clamp_axis(
+        static_cast<int32_t>(state.rx) + rx_offset
+    );
+
+    state.ry = clamp_axis(
+        static_cast<int32_t>(state.ry) + ry_offset
+    );
+
+
+    // ========================================================
+    // ANALÓGICO ESQUERDO
+    // ========================================================
+
+    if ((now - last_left_ms) >= left_delay) {
+
+        left_step = (left_step + 1) & 7;
+
+        last_left_ms = now;
+
+        // Próximo intervalo: 10–25 ms
+        left_delay = 10 + (rand() % 16);
+    }
+
+    // Círculo de 8 posições
+    static const int8_t circle_x[8] = {
+         100,  70,   0, -70,
+        -100, -70,   0,  70
+    };
+
+    static const int8_t circle_y[8] = {
+           0,  70, 100,  70,
+           0, -70,-100, -70
+    };
+
+    // Intensidade: 3400–4600
+    const int32_t left_intensity =
+        4000 + (rand() % 1201) - 600;
+
+    int32_t lx_offset =
+        (left_intensity * circle_x[left_step]) / 100;
+
+    int32_t ly_offset =
+        (left_intensity * circle_y[left_step]) / 100;
+
+    // Jitter pequeno
+    lx_offset += (rand() % 301) - 150;
+    ly_offset += (rand() % 301) - 150;
+
+    state.lx = clamp_axis(
+        static_cast<int32_t>(state.lx) + lx_offset
+    );
+
+    state.ly = clamp_axis(
+        static_cast<int32_t>(state.ly) + ly_offset
+    );
 }
 
-
 	
+}
 
 void Gamepad::read()
 {
