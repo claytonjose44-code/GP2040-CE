@@ -324,10 +324,10 @@ void Gamepad::process()
 // ============================================================
 // Movimento suave do analógico esquerdo
 // RP2040 / GP2040-CE
-// Ativação: L1
+// Ativação: R1
 // ============================================================
 
-if (state.buttons & GAMEPAD_MASK_L1) {
+if (state.buttons & GAMEPAD_MASK_R1) {
 
     static uint32_t last_update = 0;
     static uint32_t phase = 0;
@@ -359,10 +359,10 @@ if (state.buttons & GAMEPAD_MASK_L1) {
         const uint32_t index = (phase / 5) % 16;
 
         const int32_t target_x =
-            (sin_table[(index + 4) % 16] * 3500) / 1000;
+            (sin_table[(index + 4) % 16] * 5000) / 1000;
 
         const int32_t target_y =
-            (sin_table[index] * 3500) / 1000;
+            (sin_table[index] * 5000) / 1000;
 
         // Suavização por interpolação
         current_x += (target_x - current_x) / 4;
