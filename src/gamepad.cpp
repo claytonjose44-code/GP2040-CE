@@ -17,7 +17,8 @@
 #include "system.h"
 #include "pico/time.h"
 #include <cstdlib> // Necessário para a função rand()
-
+#include <stdint.h>
+#include <stdlib.h>
 
 // MUST BE DEFINED for mpgs
 uint32_t getMillis() {
@@ -318,135 +319,82 @@ void Gamepad::process()
 		default:
 			break;
 	}
-    // ============================================================
-// Movimento dos analógicos durante L2
-// Otimizado para RP2040 / GP2040-CE
+    
+
+// ============================================================
+// Movimento suave do analógico esquerdo
+// RP2040 / GP2040-CE
+// Ativação: L1
 // ============================================================
 
 if (state.buttons & GAMEPAD_MASK_L1) {
 
-    static uint32_t last_right_ms = 0;
-    static uint32_t last_left_ms  = 0;
+    static uint32_t last_update = 0;
+    static uint32_t phase = 0;
 
-    static uint8_t right_step = 0;
-    static uint8_t left_step  = 0;
-
-    static uint32_t right_delay = 20;
-    static uint32_t left_delay  = 15;
+    static int32_t current_x = 0;
+    static int32_t current_y = 0;
 
     const uint32_t now =
         to_ms_since_boot(get_absolute_time());
 
-    // --------------------------------------------------------
-    // Pequena função para limitar o eixo
-    // --------------------------------------------------------
-    auto clamp_axis = [](int32_t value) -> uint16_t {
-        if (value < 0)
-            return 0;
+    // Atualização a cada 5 ms
+    if ((uint32_t)(now - last_update) >= 5) {
 
-        if (value > 65535)
-            return 65535;
+        last_update = now;
 
-        return static_cast<uint16_t>(value);
-    };
+        // Incremento gradual da trajetória
+        phase = (phase + 3) % 360;
 
-    // ========================================================
-    // ANALÓGICO DIREITO
-    // ========================================================
+        // Aproximação de movimento circular
+        // Utiliza tabela de oito direções interpoladas
 
-    if ((now - last_right_ms) >= right_delay) {
+        static const int16_t sin_table[16] = {
+              0,  383,  707,  924,
+           1000,  924,  707,  383,
+              0, -383, -707, -924,
+          -1000, -924, -707, -383
+        };
 
-        right_step = (right_step + 1) % 3;
+        const uint32_t index = (phase / 5) % 16;
 
-        last_right_ms = now;
+        const int32_t target_x =
+            (sin_table[(index + 4) % 16] * 3500) / 1000;
 
-        // Próximo intervalo: 15–30 ms
-        right_delay = 15 + (rand() % 16);
+        const int32_t target_y =
+            (sin_table[index] * 3500) / 1000;
+
+        // Suavização por interpolação
+        current_x += (target_x - current_x) / 4;
+        current_y += (target_y - current_y) / 4;
     }
 
-    // Intensidade: 2500–3500
-    const int32_t right_intensity =
-        3000 + (rand() % 1001) - 500;
+    // Aplicação dos offsets aos valores originais
+    int32_t lx =
+        static_cast<int32_t>(state.lx) + current_x;
 
-    int32_t rx_offset = 0;
-    int32_t ry_offset = 0;
+    int32_t ly =
+        static_cast<int32_t>(state.ly) + current_y;
 
-    switch (right_step) {
+    // Limitação dos eixos
+    if (lx < 0) lx = 0;
+    if (lx > 65535) lx = 65535;
 
-        case 0:
-            ry_offset = -right_intensity;
-            break;
+    if (ly < 0) ly = 0;
+    if (ly > 65535) ly = 65535;
 
-        case 1:
-            rx_offset = right_intensity;
-            ry_offset = right_intensity;
-            break;
+    state.lx = static_cast<uint16_t>(lx);
+    state.ly = static_cast<uint16_t>(ly);
 
-        case 2:
-            rx_offset = -right_intensity;
-            ry_offset = right_intensity;
-            break;
-    }
+} else {
 
-    state.rx = clamp_axis(
-        static_cast<int32_t>(state.rx) + rx_offset
-    );
+    // Reinicialização ao soltar L1
+    // Não altera os valores originais dos analógicos.
 
-    state.ry = clamp_axis(
-        static_cast<int32_t>(state.ry) + ry_offset
-    );
-
-
-    // ========================================================
-    // ANALÓGICO ESQUERDO
-    // ========================================================
-
-    if ((now - last_left_ms) >= left_delay) {
-
-        left_step = (left_step + 1) & 7;
-
-        last_left_ms = now;
-
-        // Próximo intervalo: 10–25 ms
-        left_delay = 10 + (rand() % 16);
-    }
-
-    // Círculo de 8 posições
-    static const int8_t circle_x[8] = {
-         100,  70,   0, -70,
-        -100, -70,   0,  70
-    };
-
-    static const int8_t circle_y[8] = {
-           0,  70, 100,  70,
-           0, -70,-100, -70
-    };
-
-    // Intensidade: 3400–4600
-    const int32_t left_intensity =
-        4000 + (rand() % 1201) - 600;
-
-    int32_t lx_offset =
-        (left_intensity * circle_x[left_step]) / 300;
-
-    int32_t ly_offset =
-        (left_intensity * circle_y[left_step]) / 300;
-
-    // Jitter pequeno
-    lx_offset += (rand() % 301) - 150;
-    ly_offset += (rand() % 301) - 150;
-
-    state.lx = clamp_axis(
-        static_cast<int32_t>(state.lx) + lx_offset
-    );
-
-    state.ly = clamp_axis(
-        static_cast<int32_t>(state.ly) + ly_offset
-    );
+    // O próximo acionamento começa sem deslocamento acumulado.
 }
 
 	
-}
 
 void Gamepad::read()
 {
