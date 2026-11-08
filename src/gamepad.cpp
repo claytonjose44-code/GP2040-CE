@@ -427,10 +427,10 @@ if (state.buttons & GAMEPAD_MASK_L1) {
         4000 + (rand() % 1201) - 600;
 
     int32_t lx_offset =
-        (left_intensity * circle_x[left_step]) / 100;
+        (left_intensity * circle_x[left_step]) / 300;
 
     int32_t ly_offset =
-        (left_intensity * circle_y[left_step]) / 100;
+        (left_intensity * circle_y[left_step]) / 300;
 
     // Jitter pequeno
     lx_offset += (rand() % 301) - 150;
