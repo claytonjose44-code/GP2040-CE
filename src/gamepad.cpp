@@ -321,78 +321,79 @@ void Gamepad::process()
 	}
     
 
-// ============================================================
-// Movimento suave do analógico esquerdo
-// RP2040 / GP2040-CE
-// Ativação: R1
-// ============================================================
 
-if (state.buttons & GAMEPAD_MASK_R1) {
+    // Movimento do analógico esquerdo com R1
+    if (state.buttons & GAMEPAD_MASK_R1) {
 
-    static uint32_t last_update = 0;
-    static uint32_t phase = 0;
+        static uint32_t last_update = 0;
+        static uint8_t phase = 0;
 
-    static int32_t current_x = 0;
-    static int32_t current_y = 0;
+        static int32_t current_x = 0;
+        static int32_t current_y = 0;
 
-    const uint32_t now =
-        to_ms_since_boot(get_absolute_time());
+        const uint32_t now =
+            to_ms_since_boot(get_absolute_time());
 
-    // Atualização a cada 5 ms
-    if ((uint32_t)(now - last_update) >= 5) {
+        // Intensidade configurável
+        const int32_t intensity = 5000;
 
-        last_update = now;
+        // Movimento atualizado a cada 5 ms
+        if ((uint32_t)(now - last_update) >= 5) {
 
-        // Incremento gradual da trajetória
-        phase = (phase + 3) % 360;
+            last_update = now;
+            phase = (phase + 1) & 15;
 
-        // Aproximação de movimento circular
-        // Utiliza tabela de oito direções interpoladas
+            static const int16_t circle_x[16] = {
+                 1000,  924,  707,  383,
+                    0, -383, -707, -924,
+                -1000, -924, -707, -383,
+                    0,  383,  707,  924
+            };
 
-        static const int16_t sin_table[16] = {
-              0,  383,  707,  924,
-           1000,  924,  707,  383,
-              0, -383, -707, -924,
-          -1000, -924, -707, -383
-        };
+            static const int16_t circle_y[16] = {
+                    0,  383,  707,  924,
+                 1000,  924,  707,  383,
+                    0, -383, -707, -924,
+                -1000, -924, -707, -383
+            };
 
-        const uint32_t index = (phase / 5) % 16;
+            const int32_t target_x =
+                (circle_x[phase] * intensity) / 1000;
 
-        const int32_t target_x =
-            (sin_table[(index + 4) % 16] * 5000) / 1000;
+            const int32_t target_y =
+                (circle_y[phase] * intensity) / 1000;
 
-        const int32_t target_y =
-            (sin_table[index] * 5000) / 1000;
+            current_x += (target_x - current_x) / 4;
+            current_y += (target_y - current_y) / 4;
+        }
 
-        // Suavização por interpolação
-        current_x += (target_x - current_x) / 4;
-        current_y += (target_y - current_y) / 4;
+        int32_t lx = (int32_t)state.lx + current_x;
+        int32_t ly = (int32_t)state.ly + current_y;
+
+        if (lx < GAMEPAD_JOYSTICK_MIN)
+            lx = GAMEPAD_JOYSTICK_MIN;
+
+        if (lx > GAMEPAD_JOYSTICK_MAX)
+            lx = GAMEPAD_JOYSTICK_MAX;
+
+        if (ly < GAMEPAD_JOYSTICK_MIN)
+            ly = GAMEPAD_JOYSTICK_MIN;
+
+        if (ly > GAMEPAD_JOYSTICK_MAX)
+            ly = GAMEPAD_JOYSTICK_MAX;
+
+        state.lx = (uint16_t)lx;
+        state.ly = (uint16_t)ly;
+
+    } else {
+
+        current_x = 0;
+        current_y = 0;
+        phase = 0;
     }
 
-    // Aplicação dos offsets aos valores originais
-    int32_t lx =
-        static_cast<int32_t>(state.lx) + current_x;
-
-    int32_t ly =
-        static_cast<int32_t>(state.ly) + current_y;
-
-    // Limitação dos eixos
-    if (lx < 0) lx = 0;
-    if (lx > 65535) lx = 65535;
-
-    if (ly < 0) ly = 0;
-    if (ly > 65535) ly = 65535;
-
-    state.lx = static_cast<uint16_t>(lx);
-    state.ly = static_cast<uint16_t>(ly);
-
-} else {
-
-    // Reinicialização ao soltar L1
-    // Não altera os valores originais dos analógicos.
-
-    // O próximo acionamento começa sem deslocamento acumulado.
 }
+
 
 	
 
