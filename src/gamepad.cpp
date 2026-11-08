@@ -320,53 +320,37 @@ void Gamepad::process()
 	}
    // ============================================================
 // Movimento de Strafe no Analógico Esquerdo durante R1
-// Otimizado para RP2040 / GP2040-CE
 // ============================================================
-
 if (state.buttons & GAMEPAD_MASK_R1) {
 
     static uint32_t last_left_ms = 0;
     static uint8_t left_step = 0;
     static uint32_t left_delay = 15;
 
-    const uint32_t now = to_ms_since_boot(get_absolute_time());
-
-    // --------------------------------------------------------
-    // Pequena função para limitar o eixo
-    // --------------------------------------------------------
-    auto clamp_axis = [](int32_t value) -> uint16_t {
-        if (value < 0) return 0;
-        if (value > 65535) return 65535;
-        return static_cast<uint16_t>(value);
-    };
-
-    // ========================================================
-    // ANALÓGICO ESQUERDO - STRAFE (Esquerda/Direita)
-    // ========================================================
+    uint32_t now = to_ms_since_boot(get_absolute_time());
 
     if ((now - last_left_ms) >= left_delay) {
-        // Alterna apenas entre 2 estados: 0 (Esquerda) e 1 (Direita)
+        // Alterna entre 0 (Esquerda) e 1 (Direita)
         left_step = (left_step + 1) % 2; 
-
         last_left_ms = now;
-
-        // Próximo intervalo: 10–25 ms
         left_delay = 10 + (rand() % 16);
     }
 
-    // Intensidade base do strafe: 3400–4600
-    const int32_t left_intensity = 4000 + (rand() % 1201) - 600;
-
-    // Aplica o movimento negativo (esquerda) ou positivo (direita)
+    int32_t left_intensity = 4000 + (rand() % 1201) - 600;
     int32_t lx_offset = (left_step == 0) ? -left_intensity : left_intensity;
-
-    // Jitter pequeno para humanizar o movimento
     lx_offset += (rand() % 301) - 150;
 
-    // Aplica apenas ao eixo X (Strafe)
-    state.lx = clamp_axis(static_cast<int32_t>(state.lx) + lx_offset);
-    
-    // O eixo Y (state.ly) e o analógico direito (rx, ry) permanecem inalterados
+    // Aplica o offset na posição atual do analógico esquerdo
+    int32_t new_lx = static_cast<int32_t>(state.lx) + lx_offset;
+
+    // Limita os valores entre 0 e 65535 de forma tradicional (sem lambda)
+    if (new_lx < 0) {
+        state.lx = 0;
+    } else if (new_lx > 65535) {
+        state.lx = 65535;
+    } else {
+        state.lx = static_cast<uint16_t>(new_lx);
+    }
 }
 void Gamepad::read()
 {
