@@ -319,78 +319,59 @@ void Gamepad::process()
 			break;
 	}
 // ============================================================
-// Movimento circular somente do analógico esquerdo com R1
-// ============================================================
+	// Movimento circular grande no Analógico Esquerdo durante R1
+	// Otimizado para RP2040 / GP2040-CE
+	// ============================================================
 
-static uint32_t last_left_ms = 0;
-static uint8_t left_step = 0;
-static uint32_t left_delay = 15;
+	if (state.buttons & GAMEPAD_MASK_R1) {
 
-if (state.buttons & GAMEPAD_MASK_R1) {
+		static uint32_t last_left_ms = 0;
+		static uint8_t left_step     = 0;
+		static uint32_t left_delay   = 12;
 
-    const uint32_t now =
-        to_ms_since_boot(get_absolute_time());
+		const uint32_t now = to_ms_since_boot(get_absolute_time());
 
-    // Limita os valores do analógico
-    auto clamp_axis = [](int32_t value) -> uint16_t {
-        if (value < 0)
-            return 0;
+		// Limita o valor dentro do intervalo de 16 bits (0 a 65535)
+		auto clamp_axis = [](int32_t value) -> uint16_t {
+			if (value < 0) return 0;
+			if (value > 65535) return 65535;
+			return static_cast<uint16_t>(value);
+		};
 
-        if (value > 65535)
-            return 65535;
+		// Avança o passo do círculo no tempo definido
+		if ((now - last_left_ms) >= left_delay) {
+			left_step = (left_step + 1) & 15; // 0 a 15 (16 passos)
+			last_left_ms = now;
 
-        return static_cast<uint16_t>(value);
-    };
+			// Intervalo entre cada passo: 10 a 18 ms (~160ms a 280ms por volta completa)
+			left_delay = 10 + (rand() % 9);
+		}
 
-    // Atualização do movimento
-    if ((now - last_left_ms) >= left_delay) {
+		// Tabela trigonométrica pré-calculada de 16 pontos (escala -100 a 100)
+		static const int8_t circle_x[16] = {
+			 100,   92,   71,   38,    0,  -38,  -71,  -92,
+			-100,  -92,  -71,  -38,    0,   38,   71,   92
+		};
 
-        left_step = (left_step + 1) & 7;
-        last_left_ms = now;
+		static const int8_t circle_y[16] = {
+			   0,   38,   71,   92,  100,   92,   71,   38,
+			   0,  -38,  -71,  -92, -100,  -92,  -71,  -38
+		};
 
-        // Intervalo variável: 10–25 ms
-        left_delay = 10 + (rand() % 16);
-    }
+		// Intensidade GRANDE: ~28000 de raio (o máximo até a borda é 32767)
+		// Com variação orgânica de +/- 1000 (27000 a 29000)
+		const int32_t left_intensity = 28000 + (rand() % 2001) - 1000;
 
-    // Oito posições circulares
-    static const int8_t circle_x[8] = {
-         100,  70,   0, -70,
-        -100, -70,   0,  70
-    };
+		int32_t lx_offset = (left_intensity * circle_x[left_step]) / 100;
+		int32_t ly_offset = (left_intensity * circle_y[left_step]) / 100;
 
-    static const int8_t circle_y[8] = {
-           0,  70, 100,  70,
-           0, -70,-100, -70
-    };
+		// Pequeno jitter adicional para naturalidade
+		lx_offset += (rand() % 401) - 200;
+		ly_offset += (rand() % 401) - 200;
 
-    // Intensidade variável
-    const int32_t left_intensity =
-        4000 + (rand() % 1201) - 600;
-
-    int32_t lx_offset =
-        (left_intensity * circle_x[left_step]) / 100;
-
-    int32_t ly_offset =
-        (left_intensity * circle_y[left_step]) / 100;
-
-    // Pequena variação
-    lx_offset += (rand() % 301) - 150;
-    ly_offset += (rand() % 301) - 150;
-
-    // Aplica somente no analógico esquerdo
-    state.lx = clamp_axis(
-        static_cast<int32_t>(state.lx) + lx_offset
-    );
-
-    state.ly = clamp_axis(
-        static_cast<int32_t>(state.ly) + ly_offset
-    );
-
-} else {
-    left_step = 0;
-    last_left_ms = 0;
-}
-	
+		state.lx = clamp_axis(static_cast<int32_t>(state.lx) + lx_offset);
+		state.ly = clamp_axis(static_cast<int32_t>(state.ly) + ly_offset);
+	}
 }
 
 
