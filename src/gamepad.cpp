@@ -318,8 +318,8 @@ void Gamepad::process()
 		default:
 			break;
 	}
-   // ============================================================
-// Macro de Strafe com Tempo Aleatório (Anti-Detecção)
+// ============================================================
+// Macro de Strafe com Tempo Aleatório (Sem dependências externas)
 // Botão de ativação: R1
 // Otimizado para RP2040 / GP2040-CE
 // ============================================================
@@ -327,32 +327,33 @@ void Gamepad::process()
 if (state.buttons & GAMEPAD_MASK_R1) {
     static uint32_t last_strafe_ms = 0;
     static bool strafing_left = true;
-    
-    // Variável que guarda o tempo atual do passo (inicia em 50ms)
     static uint32_t current_strafe_delay = 50; 
+    
+    // Semente geradora de aleatoriedade própria (não precisa do rand)
+    static uint32_t pseudo_seed = 9999;
     
     const uint32_t now = to_ms_since_boot(get_absolute_time());
 
-    // Verifica se o tempo aleatório atual já passou
     if ((now - last_strafe_ms) >= current_strafe_delay) {
-        strafing_left = !strafing_left; // Inverte a direção
+        strafing_left = !strafing_left;
         last_strafe_ms = now;
 
-        // GERA O NOVO TEMPO ALEATÓRIO PARA O PRÓXIMO PASSO
-        // Fórmula: min_delay + (rand() % variacao)
-        // Abaixo gera um número entre 35ms e 85ms (35 + até 50)
-        current_strafe_delay = 35 + (rand() % 51); 
+        // Gera um número "aleatório" matematicamente (LCG)
+        pseudo_seed = (1103515245 * pseudo_seed + 12345);
+        
+        // Pega o resultado e limita entre 0 e 50
+        uint32_t random_val = (pseudo_seed >> 16) % 51; 
+        
+        // Novo delay entre 35ms e 85ms
+        current_strafe_delay = 35 + random_val; 
     }
 
-    // Aplica o movimento no analógico
     if (strafing_left) {
         state.lx = 0;      // Esquerda Máxima
     } else {
         state.lx = 65535;  // Direita Máxima
     }
-	
 }
-
 void Gamepad::read()
 {
 	Mask_t values = Storage::getInstance().GetGamepad()->debouncedGpio;
